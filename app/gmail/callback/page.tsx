@@ -8,23 +8,25 @@ export default function GmailCallbackPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const token = searchParams.get("token");
+    const accessToken = searchParams.get("accessToken");
+    const refreshToken = searchParams.get("refreshToken");
     const error = searchParams.get("error");
 
     if (error) {
-      // Nếu có lỗi, redirect về trang chủ với thông báo lỗi
-      router.push(`/?error=${encodeURIComponent(error)}`);
+      // Nếu có lỗi, redirect về trang home với thông báo lỗi
+      router.push(`/home?error=${encodeURIComponent(error)}`);
       return;
     }
 
-    if (token) {
-      // Lưu access token vào localStorage
-      localStorage.setItem("gmail_access_token", token);
-      // Redirect về trang chủ với thông báo thành công
-      router.push("/?gmail_connected=true");
+    if (accessToken && refreshToken) {
+      // Lưu cả access token và refresh token vào localStorage
+      localStorage.setItem("gmail_access_token", accessToken);
+      localStorage.setItem("gmail_refresh_token", refreshToken);
+      // Redirect về trang home với thông báo thành công
+      router.push("/home?gmail_connected=true");
     } else {
-      // Nếu không có token, redirect về trang chủ với thông báo lỗi
-      router.push("/?error=no_token");
+      // Nếu không có token, redirect về trang home với thông báo lỗi
+      router.push("/home?error=no_token");
     }
   }, [searchParams, router]);
 

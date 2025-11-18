@@ -1,13 +1,5 @@
-import Overview from "@/components/overview";
-import Table from "@/components/table";
-import GmailConnect from "@/components/gmail-connect";
+import { redirect } from "next/navigation";
 
-export default function Home() {
-  return (
-    <>
-      <Overview />
-      <GmailConnect />
-      <Table />
-    </>
-  );
+export default function DefaultPage() {
+  redirect("/home");
 }

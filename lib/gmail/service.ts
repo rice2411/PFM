@@ -1,5 +1,6 @@
 import { google } from "googleapis";
 import { gmailConfig } from "./config";
+import { BANK_NAMES } from "@/constant/bank";
 
 /**
  * Service để lấy email từ Gmail API
@@ -17,31 +18,47 @@ export interface EmailMessage {
 }
 
 /**
- * Lấy access token từ refresh token hoặc code
+ * Lấy access token và refresh token từ authorization code
  */
-export async function getAccessToken(
-  refreshToken?: string,
-  code?: string
+export async function getTokensFromCode(code: string): Promise<{
+  accessToken: string;
+  refreshToken: string | null;
+}> {
+  const oauth2Client = new google.auth.OAuth2(
+    gmailConfig.clientId,
+    gmailConfig.clientSecret,
+    gmailConfig.redirectUri,
+  );
+
+  const { tokens } = await oauth2Client.getToken(code);
+  oauth2Client.setCredentials(tokens);
+
+  return {
+    accessToken: tokens.access_token || "",
+    refreshToken: tokens.refresh_token || null,
+  };
+}
+
+/**
+ * Lấy access token mới từ refresh token
+ */
+export async function refreshAccessToken(
+  refreshToken: string,
 ): Promise<string> {
   const oauth2Client = new google.auth.OAuth2(
     gmailConfig.clientId,
     gmailConfig.clientSecret,
-    gmailConfig.redirectUri
+    gmailConfig.redirectUri,
   );
 
-  if (refreshToken) {
-    oauth2Client.setCredentials({ refresh_token: refreshToken });
-    const { credentials } = await oauth2Client.refreshAccessToken();
-    return credentials.access_token || "";
+  oauth2Client.setCredentials({ refresh_token: refreshToken });
+  const { credentials } = await oauth2Client.refreshAccessToken();
+
+  if (!credentials.access_token) {
+    throw new Error("Không thể refresh access token");
   }
 
-  if (code) {
-    const { tokens } = await oauth2Client.getToken(code);
-    oauth2Client.setCredentials(tokens);
-    return tokens.access_token || "";
-  }
-
-  throw new Error("Cần refresh token hoặc authorization code");
+  return credentials.access_token;
 }
 
 /**
@@ -51,7 +68,7 @@ export function getGmailClient(accessToken: string) {
   const oauth2Client = new google.auth.OAuth2(
     gmailConfig.clientId,
     gmailConfig.clientSecret,
-    gmailConfig.redirectUri
+    gmailConfig.redirectUri,
   );
 
   oauth2Client.setCredentials({ access_token: accessToken });
@@ -59,22 +76,30 @@ export function getGmailClient(accessToken: string) {
 }
 
 /**
- * Lấy danh sách email
+ * Lấy danh sách email với pagination
  */
 export async function listEmails(
   accessToken: string,
   maxResults: number = 10,
-  query?: string
-): Promise<EmailMessage[]> {
+  query?: string,
+  pageToken?: string,
+): Promise<{
+  emails: EmailMessage[];
+  nextPageToken?: string;
+  resultSizeEstimate?: number;
+}> {
   const gmail = getGmailClient(accessToken);
 
   const response = await gmail.users.messages.list({
     userId: "me",
     maxResults,
     q: query || "is:unread", // Mặc định lấy email chưa đọc
+    pageToken: pageToken || undefined,
   });
 
   const messages = response.data.messages || [];
+  const nextPageToken = response.data.nextPageToken;
+  const resultSizeEstimate = response.data.resultSizeEstimate;
 
   // Lấy chi tiết từng email
   const emailPromises = messages.map(async (message) => {
@@ -83,7 +108,19 @@ export async function listEmails(
   });
 
   const emails = await Promise.all(emailPromises);
-  return emails.filter((email): email is EmailMessage => email !== null);
+  const validEmails = emails.filter(
+    (email): email is EmailMessage =>
+      email !== null &&
+      BANK_NAMES.some((b) =>
+        email.from.toLowerCase().includes(b.toLowerCase()),
+      ),
+  );
+
+  return {
+    emails: validEmails,
+    nextPageToken,
+    resultSizeEstimate,
+  };
 }
 
 /**
@@ -91,7 +128,7 @@ export async function listEmails(
  */
 export async function getEmailDetails(
   accessToken: string,
-  messageId: string
+  messageId: string,
 ): Promise<EmailMessage | null> {
   try {
     const gmail = getGmailClient(accessToken);
@@ -106,8 +143,10 @@ export async function getEmailDetails(
     const headers = message.payload?.headers || [];
 
     const getHeader = (name: string) => {
-      return headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())
-        ?.value || "";
+      return (
+        headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())
+          ?.value || ""
+      );
     };
 
     // Parse body
@@ -117,7 +156,8 @@ export async function getEmailDetails(
     } else if (message.payload?.parts) {
       // Tìm phần text/plain hoặc text/html
       const textPart = message.payload.parts.find(
-        (part) => part.mimeType === "text/plain" || part.mimeType === "text/html"
+        (part) =>
+          part.mimeType === "text/plain" || part.mimeType === "text/html",
       );
       if (textPart?.body?.data) {
         body = Buffer.from(textPart.body.data, "base64").toString();
@@ -155,26 +195,33 @@ export function parseTransactionFromEmail(email: EmailMessage): {
   const subject = email.subject.toLowerCase();
 
   // Tìm số tiền (ví dụ: 500.000 VND, 500000, etc.)
-  const amountMatch = body.match(/(\d{1,3}(?:[.,]\d{3})*)\s*(?:vnd|đ|dong)/i) ||
+  const amountMatch =
+    body.match(/(\d{1,3}(?:[.,]\d{3})*)\s*(?:vnd|đ|dong)/i) ||
     body.match(/(\d{1,3}(?:[.,]\d{3})*)/);
-  
+
   if (!amountMatch) return null;
 
   const amountStr = amountMatch[1].replace(/[.,]/g, "");
   const amount = parseInt(amountStr);
 
   // Xác định loại giao dịch (thu/chi)
-  const isIncome = /(nhan|thu|tien vao|credit|deposit)/i.test(body) ||
+  const isIncome =
+    /(nhan|thu|tien vao|credit|deposit)/i.test(body) ||
     /(chuyen khoan den|tien den)/i.test(subject);
-  const isExpense = /(chi|tien ra|debit|withdraw|thanh toan)/i.test(body) ||
+  const isExpense =
+    /(chi|tien ra|debit|withdraw|thanh toan)/i.test(body) ||
     /(chuyen khoan di|tien di)/i.test(subject);
 
   // Tìm ngân hàng
-  const bankMatch = body.match(/(vietcombank|techcombank|bidv|vietinbank|acb|mbbank|vpbank|tpbank)/i);
+  const bankMatch = body.match(
+    /(vietcombank|techcombank|bidv|vietinbank|acb|mbbank|vpbank|tpbank)/i,
+  );
   const bank = bankMatch ? bankMatch[1] : "Unknown";
 
   // Tìm mô tả
-  const descriptionMatch = body.match(/(?:noi dung|mo ta|description)[:]\s*(.+?)(?:\n|$)/i);
+  const descriptionMatch = body.match(
+    /(?:noi dung|mo ta|description)[:]\s*(.+?)(?:\n|$)/i,
+  );
   const description = descriptionMatch
     ? descriptionMatch[1].trim()
     : email.snippet.substring(0, 50);
@@ -187,4 +234,3 @@ export function parseTransactionFromEmail(email: EmailMessage): {
     type: isIncome ? "income" : "expense",
   };
 }
-

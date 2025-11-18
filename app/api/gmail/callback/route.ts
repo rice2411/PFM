@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAccessToken } from "@/lib/gmail/service";
+import { getTokensFromCode } from "@/lib/gmail/service";
 
 /**
  * API route để xử lý OAuth callback
@@ -24,16 +24,21 @@ export async function GET(request: NextRequest) {
     }
 
     // Lấy access token và refresh token
-    const accessToken = await getAccessToken(undefined, code);
+    const { accessToken, refreshToken } = await getTokensFromCode(code);
 
-    // TODO: Lưu refresh token vào database hoặc session
-    // Ở đây tạm thời redirect về trang callback với token trong URL (không an toàn cho production)
-    // Trong production, nên lưu vào database hoặc session
+    if (!refreshToken) {
+      throw new Error("Không nhận được refresh token. Vui lòng đăng nhập lại.");
+    }
 
-    // Redirect về trang callback client-side để lưu token vào localStorage
+    // Redirect về trang callback client-side để lưu tokens vào localStorage
     const baseUrl = new URL(request.url).origin;
+    const params = new URLSearchParams({
+      accessToken,
+      refreshToken,
+    });
+    
     return NextResponse.redirect(
-      new URL(`/gmail/callback?token=${encodeURIComponent(accessToken)}`, baseUrl)
+      new URL(`/gmail/callback?${params.toString()}`, baseUrl)
     );
   } catch (error) {
     console.error("Error in callback:", error);

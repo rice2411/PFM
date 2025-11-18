@@ -4,6 +4,7 @@ import { Nunito } from "next/font/google";
 import { ThemeInit } from "../.flowbite-react/init";
 import "./globals.css";
 import Navbar from "@/components/navbar";
+import MainLayout from "@/layout/MainLayout";
 
 const nunito = Nunito({
   subsets: ["latin", "vietnamese"],
@@ -27,10 +28,7 @@ export default function RootLayout({
       </head>
       <body className={`${nunito.variable} antialiased dark:bg-gray-900`}>
         <ThemeInit />
-        <Navbar />
-        <div className="flex w-full flex-col gap-4 px-4 pt-6 sm:px-6 sm:pt-10 lg:px-8">
-          {children}
-        </div>
+        {children}
       </body>
     </html>
   );
