@@ -7,18 +7,70 @@ import {
   DropdownTrigger,
 } from "@/components/ui/dropdown";
 import { cn } from "@/lib/utils";
+import { AuthService } from "@/services/auth.services";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { LogOutIcon, SettingsIcon, UserIcon } from "./icons";
 
 export function UserInfo() {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
+  // Khởi tạo state trực tiếp từ localStorage (chạy ngay khi component khởi tạo)
+  // Sử dụng function initializer để chỉ chạy 1 lần khi mount, trước khi render
+  const [user, setUser] = useState<any | null>(() => {
+    return AuthService.getUserFromStorage();
+  });
 
-  const USER = {
-    name: "John Smith",
-    email: "johnson@nextadmin.com",
-    img: "/images/user/user-03.png",
+  useEffect(() => {
+    // Lắng nghe event để cập nhật khi user data thay đổi (ví dụ: refresh token)
+    const handleUserUpdate = () => {
+      const updatedUser = AuthService.getUserFromStorage();
+      setUser(updatedUser);
+    };
+
+    // Custom event khi user được lưu trong cùng tab (quan trọng: refresh token, update profile)
+    window.addEventListener("userUpdated", handleUserUpdate);
+    
+    // Storage event khi user đăng nhập ở tab khác (optional: nếu cần multi-tab sync)
+    window.addEventListener("storage", handleUserUpdate);
+
+    return () => {
+      window.removeEventListener("userUpdated", handleUserUpdate);
+      window.removeEventListener("storage", handleUserUpdate);
+    };
+  }, []);
+
+  // Lấy thông tin user hoặc giá trị mặc định
+  const userName =
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    user?.email?.split("@")[0] ||
+    "User";
+  
+  const userEmail = user?.email || "";
+  
+  const userAvatar =
+    user?.user_metadata?.avatar_url ||
+    user?.user_metadata?.picture ||
+    "/images/user/user-03.png";
+
+  const handleLogout = async () => {
+    // Đóng dropdown
+    setIsOpen(false);
+
+    try {
+      // Gọi hàm logout từ AuthService
+      await AuthService.logout();
+      
+      // Redirect về trang đăng nhập
+      router.push("/auth/sign-in");
+    } catch (error) {
+      console.error("Lỗi khi đăng xuất:", error);
+      // Vẫn redirect về trang đăng nhập dù có lỗi
+      router.push("/auth/sign-in");
+    }
   };
 
   return (
@@ -28,15 +80,15 @@ export function UserInfo() {
 
         <figure className="flex items-center gap-3">
           <Image
-            src={USER.img}
-            className="size-12"
-            alt={`Avatar of ${USER.name}`}
+            src={userAvatar}
+            className="size-12 rounded-full"
+            alt={`Avatar of ${userName}`}
             role="presentation"
-            width={200}
-            height={200}
+            width={48}
+            height={48}
           />
           <figcaption className="flex items-center gap-1 font-medium text-dark dark:text-dark-6 max-[1024px]:sr-only">
-            <span>{USER.name}</span>
+            <span>{userName}</span>
 
             <ChevronUpIcon
               aria-hidden
@@ -58,20 +110,22 @@ export function UserInfo() {
 
         <figure className="flex items-center gap-2.5 px-5 py-3.5">
           <Image
-            src={USER.img}
-            className="size-12"
-            alt={`Avatar for ${USER.name}`}
+            src={userAvatar}
+            className="size-12 rounded-full"
+            alt={`Avatar for ${userName}`}
             role="presentation"
-            width={200}
-            height={200}
+            width={48}
+            height={48}
           />
 
           <figcaption className="space-y-1 text-base font-medium">
             <div className="mb-2 leading-none text-dark dark:text-white">
-              {USER.name}
+              {userName}
             </div>
 
-            <div className="leading-none text-gray-6">{USER.email}</div>
+            {userEmail && (
+              <div className="leading-none text-gray-6">{userEmail}</div>
+            )}
           </figcaption>
         </figure>
 
@@ -106,7 +160,7 @@ export function UserInfo() {
         <div className="p-2 text-base text-[#4B5563] dark:text-dark-6">
           <button
             className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-[9px] hover:bg-gray-2 hover:text-dark dark:hover:bg-dark-3 dark:hover:text-white"
-            onClick={() => setIsOpen(false)}
+            onClick={handleLogout}
           >
             <LogOutIcon />
 

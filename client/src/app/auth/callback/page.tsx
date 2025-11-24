@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AuthService } from "@/services/auth.service";
+import { AuthService } from "@/services/auth.services";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -14,9 +14,7 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        // Supabase redirect về với hash fragment (#access_token=...)
-        // Cần đọc từ window.location.hash thay vì searchParams
-        const hash = window.location.hash.substring(1); // Bỏ dấu #
+        const hash = window.location.hash.substring(1); 
         const params = new URLSearchParams(hash);
 
         const accessToken = params.get("access_token");
@@ -36,16 +34,18 @@ export default function AuthCallbackPage() {
         }
 
         if (accessToken && refreshToken) {
-          // Lưu tokens vào localStorage
-          AuthService.saveAuthData(accessToken, refreshToken);
+          try {
+            const user = await AuthService.getUser(accessToken);
+            AuthService.saveAuthData(accessToken, refreshToken, user);
+          } catch (userError) {
+            console.error("Không thể lấy thông tin user:", userError);
+          }
 
           setStatus("success");
           setMessage("Đăng nhập thành công! Đang chuyển hướng...");
 
-          // Xóa hash fragment khỏi URL để URL sạch hơn
           window.history.replaceState(null, "", window.location.pathname);
 
-          // Redirect về trang home
           setTimeout(() => {
             router.push("/");
           }, 1000);

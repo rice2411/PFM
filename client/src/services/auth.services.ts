@@ -67,7 +67,7 @@ export const AuthService = {
   },
 
   /**
-   * Đăng xuất
+   * Đăng xuất (cần accessToken)
    */
   signOut: async (accessToken: string): Promise<void> => {
     try {
@@ -89,6 +89,45 @@ export const AuthService = {
       localStorage.removeItem('auth_user');
     } catch (error) {
       console.error('Error signing out:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Đăng xuất (tự động lấy token từ localStorage)
+   */
+  logout: async (): Promise<void> => {
+    try {
+      const accessToken = AuthService.getAccessToken();
+      
+      // Gọi API signOut nếu có accessToken
+      if (accessToken) {
+        try {
+          await AuthService.signOut(accessToken);
+        } catch (error) {
+          // Nếu API fail, vẫn xóa localStorage
+          console.error('Lỗi khi gọi API signOut:', error);
+          localStorage.removeItem('auth_access_token');
+          localStorage.removeItem('auth_refresh_token');
+          localStorage.removeItem('auth_user');
+        }
+      } else {
+        // Nếu không có token, chỉ xóa localStorage
+        localStorage.removeItem('auth_access_token');
+        localStorage.removeItem('auth_refresh_token');
+        localStorage.removeItem('auth_user');
+      }
+
+      // Dispatch event để các component khác biết user đã logout
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('userUpdated'));
+      }
+    } catch (error) {
+      console.error('Lỗi khi đăng xuất:', error);
+      // Vẫn xóa localStorage dù có lỗi
+      localStorage.removeItem('auth_access_token');
+      localStorage.removeItem('auth_refresh_token');
+      localStorage.removeItem('auth_user');
       throw error;
     }
   },
@@ -130,6 +169,10 @@ export const AuthService = {
     localStorage.setItem('auth_refresh_token', refreshToken);
     if (user) {
       localStorage.setItem('auth_user', JSON.stringify(user));
+      // Dispatch event để các component khác biết user đã được cập nhật
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('userUpdated'));
+      }
     }
   },
 

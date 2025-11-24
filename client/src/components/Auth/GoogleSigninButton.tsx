@@ -1,7 +1,7 @@
 "use client";
 
 import { GoogleIcon } from "@/assets/icons";
-import { AuthService } from "@/services/auth.service";
+import { AuthService } from "@/services/auth.services";
 import { useState } from "react";
 
 export default function GoogleSigninButton({ text }: { text: string }) {

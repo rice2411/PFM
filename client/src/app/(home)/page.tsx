@@ -9,7 +9,6 @@ import { ChatsCard } from "./_components/chats-card";
 import { OverviewCardsGroup } from "./_components/overview-cards";
 import { OverviewCardsSkeleton } from "./_components/overview-cards/skeleton";
 import { RegionLabels } from "./_components/region-labels";
-import { AuthHandler } from "./_components/auth-handler";
 
 type PropsType = {
   searchParams: Promise<{
@@ -24,7 +23,6 @@ export default async function Home({ searchParams }: PropsType) {
 
   return (
     <>
-      <AuthHandler />
       <Suspense fallback={<OverviewCardsSkeleton />}>
         <OverviewCardsGroup />
       </Suspense>
