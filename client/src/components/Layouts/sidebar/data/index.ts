@@ -90,16 +90,16 @@ export const NAV_DATA = [
           },
         ],
       },
-      {
-        title: "Authentication",
-        icon: Icons.Authentication,
-        items: [
-          {
-            title: "Sign In",
-            url: "/auth/sign-in",
-          },
-        ],
-      },
+      // {
+      //   title: "Authentication",
+      //   icon: Icons.Authentication,
+      //   items: [
+      //     {
+      //       title: "Sign In",
+      //       url: "/auth/sign-in",
+      //     },
+      //   ],
+      // },
     ],
   },
 ];
